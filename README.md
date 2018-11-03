@@ -73,12 +73,12 @@ If found, you might see the "a-test-string", depending on what is actually in th
 This can also be achieved by configuring pairio to always look for key/value pairs under the 'magland' cloud collection
 
 ```
-pa.setConfig(users=['magland'])
+pa.setConfig(collections=['magland'])
 val=pa.get({'name':'test'},local=False)
 print(val)
 ```
 
-In general, pairio will first look on the local machine. If they key is not found, it will then look in the cloud under the collections owned by each of the users specified in the `pa.setConfig(users=users)` command. If still not found, it will return `None`.
+In general, pairio will first look on the local machine. If they key is not found, it will then look in the cloud under the collection specified as trusted using the `pa.setConfig(collections=collections)` command. If still not found, it will return `None`.
 
 ## Storing pairs in the cloud
 
@@ -98,7 +98,7 @@ You can specify the default behavior of the `pa.get()` and `pa.set()` operations
 
 ```
 pa.setConfig(
-  users=['list','of','user','names'], # Names of user cloud collections to search when getting values
+  collections=['list','of','user','names'], # Names of cloud collections to search when getting values
   user='user-name', # The user name for setting key/value pairs in the cloud
   token='user-token', # The token corresponding to the user name
   local=True, # Whether or not to store key/value pairs locally when set() is called
@@ -109,9 +109,14 @@ pa.setConfig(
 
 ## Hosting a pairio server
 
-You can host your own pairio server. The source code for the NodeJS server is found in the `pairioserver/` directory.
+You can host your own pairio server using npm, for example.
+```
+npm install
+PORT=8888 npm run server
+```
+The source code for the NodeJS server is found in the `pairioserver/` directory.
 
-TODO: finish this section.
+To use this server from a pairo client you need to set the `PAIRIO_URL` environment variable.
 
 See server API docs at the top of this file: https://github.com/magland/pairio/blob/master/pairioserver/pairioserver.js
 
