@@ -70,7 +70,7 @@ class PairioClient():
 
             if str2!=test_val:
                 self.setRemote(test_key,None)
-                raise Exception('pairio test failed for user={}. {}<>{}'.format(user,str2,test_string))
+                raise Exception('pairio test failed for user={}. {}<>{}'.format(user,str2,test_val))
             else:
                 self.setRemote(test_key,None)
                 print ('Pairio user set to {}. Test succeeded.'.format(user))
