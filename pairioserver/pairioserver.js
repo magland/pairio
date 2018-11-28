@@ -113,6 +113,7 @@ const express = require('express');
 const cors = require('cors');
 const MongoClient = require('mongodb').MongoClient;
 const crypto = require('crypto');
+const fs = require('fs');
 
 const default_max_num_pairs=10000;
 const default_max_num_long_pairs=100;
