@@ -5,6 +5,7 @@ import os
 import pathlib
 import random
 import fasteners
+import base64
 
 class PairioClient():
     def __init__(self):
@@ -62,7 +63,8 @@ class PairioClient():
             test_key='test.key.'+_random_string(6)
             test_val='test.val.'+_random_string(6)
             try:
-                self.setRemote(test_key,test_val)
+                if not self.setRemote(test_key,test_val):
+                    raise Exception('Error setting key to remote pairio database.')
             except:
                 raise Exception('Error writing to remote pairio database.')
 
@@ -186,9 +188,38 @@ class PairioClient():
                 url0=url0+'&overwrite=false'
             obj=self._http_get_json(url0)
             if not obj['success']:
+                print('WARNING: '+obj['error'])
                 return False
 
         return True
+
+    def getObject(
+        self,
+        key,
+        collection=None,
+        local=None,
+        remote=None,
+        collections=None
+    ):
+        val=self.get(key=key,collection=collection,local=local,remote=remote,collections=collections)
+        if not val:
+            return val
+        val2=json.loads(base64.b64decode(val))
+        return val2
+
+
+    def setObject(
+        self,
+        key,
+        value,
+        local=None,
+        remote=None,
+        user=None,
+        token=None,
+        overwrite=None # default is True
+    ):
+        value2=base64.b64encode(json.dumps(value).encode('utf-8')).decode()
+        return self.set(key=key,value=value2,local=local,remote=remote,user=user,token=token,overwrite=overwrite)
     
     def setLocal(self,key,value,overwrite=None):
         if not self._config['local_database_path']:

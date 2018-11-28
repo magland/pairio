@@ -1,9 +1,13 @@
 /*
 
 Pairio is a service for sharing key/value pairs per user
-where both the keys and values are no longer than 40 characters.
+where both the keys and values are no longer than 40 characters *see exception below*.
 This is useful for associating the hash of an input with the
 hash of an output.
+
+Exception: we now allow values to be longer than 40 characters
+for a relatively small number of records. This is to enable
+storing of configuration records. (Need to think about this)
 
 API:
 GET:/get/[user]/[key]
@@ -83,6 +87,10 @@ GET:/admin/set/[user]/max_num_pairs/[max_num_pairs]?signature=[signature]
 
   and [admin_token] is as above.
 
+GET:/admin/set/[user]/max_num_long_pairs/[max_num_long_pairs]?signature=[signature]
+
+  similar as above
+
 Information about a user may be obtained via
 
 GET:/admin/get/[user]/params?signature=[signature]
@@ -107,8 +115,10 @@ const MongoClient = require('mongodb').MongoClient;
 const crypto = require('crypto');
 
 const default_max_num_pairs=10000;
+const default_max_num_long_pairs=100;
 const MAX_KEY_LENGTH=40;
-const MAX_VALUE_LENGTH=40;
+//const MAX_VALUE_LENGTH=40;
+const MAX_VALUE_LENGTH=10000;
 
 function PairioServer(API) {
   this.app = function() {
@@ -147,11 +157,19 @@ function PairioServer(API) {
   // API /set/:user/:key/:value
   m_app.get('/set/:user/:key/:value', async function(req, res) {
     let params = req.params;
-    if ((params.key.length>MAX_KEY_LENGTH)||(params.value.length>MAX_VALUE_LENGTH)) {
+    if (params.key.length>MAX_KEY_LENGTH) {
       res.json({
         success:false,
         error:'Invalid key'
       });
+      return;
+    }
+    if (params.value.length>MAX_VALUE_LENGTH) {
+      res.json({
+        success:false,
+        error:'Length of value is too long'
+      });
+      return;
     }
     let query = req.query;
     if (!query.signature) {
@@ -169,17 +187,35 @@ function PairioServer(API) {
       });
       return;
     }
-    let test=await API.get(params.user,params.key);
-    if (!test.success) {
-      ok=await increment_user_num_pairs(params.user);
-      if (!ok) {
-        res.json({
-          success:false,
-          error:'Unable to increment user pair count. Quota exceeded?'
-        });
-        return;
-      }
+    
+    let is_long_pair=(params.value.length>40);
+    if (!is_long_pair) {
+      let test=await API.get(params.user,params.key);
+      if (!test.success) {
+        ok=await increment_user_num_pairs(params.user);
+        if (!ok) {
+          res.json({
+            success:false,
+            error:'Unable to increment user pair count. Quota exceeded?'
+          });
+          return;
+        }
+      }  
     }
+    else {
+      let test=await API.get(params.user,params.key);
+      if ( (!test.success) || (test.value.length<=40) ) {
+        ok=await increment_user_num_long_pairs(params.user);
+        if (!ok) {
+          res.json({
+            success:false,
+            error:'Unable to increment user *long* pair count. Quota exceeded?'
+          });
+          return;
+        }
+      }  
+    }
+    
     let overwrite=true;
     if (query.overwrite=='false')
       overwrite=false;
@@ -303,6 +339,39 @@ function PairioServer(API) {
     res.json(obj);
   });
 
+  // API /admin/set/:user/max_num_long_pairs
+  m_app.get('/admin/set/:user/max_num_long_pairs/:max_num_long_pairs', async function(req, res) {
+    let params = req.params;
+    let query = req.query;
+    if (!query.signature) {
+      res.json({
+        success:false,
+        error:'Missing query parameter: signature'
+      });
+      return;
+    }
+    let ok=await verify_admin_signature(`/admin/set/${params.user}/max_num_long_pairs/${params.max_num_long_pairs}`,query.signature);
+    if (!ok) {
+      res.json({
+        success:false,
+        error:'Invalid signature'
+      });
+      return;
+    }
+    try {
+      obj = await API.adminSetUserParam(params.user,'max_num_long_pairs',params.max_num_long_pairs);
+    }
+    catch(err) {
+      console.error(err);
+      res.json({
+        success:false,
+        error:err.message
+      });
+      return;
+    }
+    res.json(obj);
+  });
+
   // API /admin/get/:user/params
   m_app.get('/admin/get/:user/params', async function(req, res) {
     let params = req.params;
@@ -346,6 +415,20 @@ function PairioServer(API) {
       return false;
     }
     info.params.num_pairs++;
+    await API.DB.setUserInfo(user,info);
+    return true;
+  }
+
+  async function increment_user_num_long_pairs(user) {
+    let info=await API.DB.getUserInfo(user);
+    if (!info) return false;
+    info.params=info.params||{};
+    info.params.num_long_pairs=info.params.num_long_pairs||0;
+    let max0=info.params.max_num_long_pairs||default_max_num_long_pairs;
+    if (info.params.num_long_pairs+1>max0) {
+      return false;
+    }
+    info.params.num_long_pairs++;
     await API.DB.setUserInfo(user,info);
     return true;
   }
@@ -397,7 +480,6 @@ function PairioApi(DB) {
   };
 
   this.set=async function(user,key,value,overwrite) {
-    //todo: check not to exceed max_num_pairs
     await DB.setUserPair(user,key,value,overwrite);
     return {success:true};
   };
@@ -464,7 +546,8 @@ function PairioDB() {
     }
     let collection=m_db.collection("userpairs");
     if (!value) {
-      await collection.remove({user:user,key:key});
+      //await collection.remove({user:user,key:key});
+      await collection.deleteOne({user:user,key:key});
     }
     else if (overwrite) {
       await collection.updateOne({user:user,key:key},{$set:{value: value}},{upsert:true});
