@@ -1,5 +1,5 @@
 import json
-import urllib
+import urllib.request as request
 import hashlib
 import os
 import pathlib
@@ -189,7 +189,7 @@ class PairioClient():
                 url0=url0+'&overwrite=false'
             obj=self._http_get_json(url0)
             if not obj['success']:
-                print('WARNING: '+obj['error'])
+                print ('WARNING: '+obj['error'])
                 return False
 
         return True
@@ -312,7 +312,7 @@ def _http_get_json(url,verbose=False):
     if verbose:
       print ('_http_get_json::: '+url)
     try:
-        req=urllib.request.urlopen(url)
+        req=request.urlopen(url)
     except:
         raise Exception('Unable to open url: '+url)
     try:
